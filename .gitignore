@@ -1,0 +1,11 @@
+# packages that should not be included in the final package
+/node_modules
+
+# dotenv environment variables file
+.env
+
+# firebase service account file
+mern-blog-bc39f-firebase-adminsdk-f8jv6-de3e2c721d.json
+
+# test api file
+requests.rest
