@@ -273,6 +273,19 @@ server.post("/google-auth", async (req, res) => {
         });
 });
 
+server.get("/latest-blogs", (req, res) => {
+    Blog.find({ draft: false }).sort({ 'publishedAt': -1 }).limit(10).select('blog_id title banner des tags publishedAt author activity -_id')
+        .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img -_id')
+        .then((blogs) => {
+            return res.status(200).json({blogs});
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
 
 server.post("/create-blog", verifyJWT, (req, res) => {
 
