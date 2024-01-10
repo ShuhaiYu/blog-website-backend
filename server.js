@@ -273,11 +273,13 @@ server.post("/google-auth", async (req, res) => {
         });
 });
 
-server.get("/latest-blogs", (req, res) => {
-    Blog.find({ draft: false }).sort({ 'publishedAt': -1 }).limit(10).select('blog_id title banner des tags publishedAt author activity -_id')
+server.post("/latest-blogs", (req, res) => {
+    let { page } = req.body;
+    let maxLimit = 5;
+    Blog.find({ draft: false }).sort({ 'publishedAt': -1 }).limit(maxLimit).skip((page - 1) * maxLimit).select('blog_id title banner des tags publishedAt author activity -_id')
         .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img -_id')
         .then((blogs) => {
-            return res.status(200).json({blogs});
+            return res.status(200).json({ blogs });
         })
         .catch((err) => {
             return res.status(500).json({
@@ -286,6 +288,66 @@ server.get("/latest-blogs", (req, res) => {
         });
 });
 
+server.post("/count-latest-blogs", (req, res) => {
+    Blog.countDocuments({ draft: false })
+        .then((count) => {
+            return res.status(200).json({ totalDocs: count });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.get("/trending-blogs", (req, res) => {
+    Blog.find({ draft: false }).sort({ 'activity.total_reads': -1, "activity.total_likes": -1, 'publishedAt': -1 }).limit(5).select('blog_id title publishedAt author activity -_id')
+        .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img -_id')
+        .then((blogs) => {
+            return res.status(200).json({ blogs });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/search-blogs", (req, res) => {
+    let { tag, page } = req.body;
+
+    let findQuery = { draft: false, tags: tag };
+
+    let maxLimit = 2;
+
+    Blog.find(findQuery).sort({ 'publishedAt': -1 }).limit(maxLimit).select('blog_id title banner des tags publishedAt author activity -_id')
+        .skip((page - 1) * maxLimit)
+        .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img -_id')
+        .then((blogs) => {
+            return res.status(200).json({ blogs });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/count-search-blogs", (req, res) => {
+    let { tag } = req.body;
+
+    let findQuery = { draft: false, tags: tag };
+
+    Blog.countDocuments(findQuery)
+        .then((count) => {
+            return res.status(200).json({ totalDocs: count });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
 
 server.post("/create-blog", verifyJWT, (req, res) => {
 
