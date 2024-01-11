@@ -314,7 +314,7 @@ server.get("/trending-blogs", (req, res) => {
 });
 
 server.post("/search-blogs", (req, res) => {
-    let { tag, query, page } = req.body;
+    let { tag, query, author, page } = req.body;
 
     let findQuery;
 
@@ -322,6 +322,8 @@ server.post("/search-blogs", (req, res) => {
         findQuery = { draft: false, tags: tag };
     } else if (query) {
         findQuery = { draft: false, title: new RegExp(query, 'i') };
+    } else if (author) {
+        findQuery = { draft: false, author };
     }
 
     let maxLimit = 2;
@@ -340,7 +342,7 @@ server.post("/search-blogs", (req, res) => {
 });
 
 server.post("/count-search-blogs", (req, res) => {
-    let { tag, query } = req.body;
+    let { tag, query, author } = req.body;
 
     let findQuery;
 
@@ -348,6 +350,8 @@ server.post("/count-search-blogs", (req, res) => {
         findQuery = { draft: false, tags: tag };
     } else if (query) {
         findQuery = { draft: false, title: new RegExp(query, 'i') };
+    } else if (author) {
+        findQuery = { draft: false, author };
     }
 
     Blog.countDocuments(findQuery)
@@ -366,6 +370,21 @@ server.post("/search-users", (req, res) => {
     User.find({ 'personal_info.username': new RegExp(query, 'i') }).limit(20).select('personal_info.fullname personal_info.username personal_info.profile_img -_id')
         .then((users) => {
             return res.status(200).json({ users });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/get-profile", (req, res) => {
+    let { username } = req.body;
+
+    User.findOne({ 'personal_info.username': username })
+        .select('-personal_info.password -google_auth -updatedAt -blogs')
+        .then(user => {
+            return res.status(200).json(user);
         })
         .catch((err) => {
             return res.status(500).json({
