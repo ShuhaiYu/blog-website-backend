@@ -85,8 +85,7 @@ const verifyJWT = (req, res, next) => {
 
 const formatDataToSend = (user) => {
 
-    const access_token = jwt.sign({ _id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '15m' });
-    console.log(access_token);
+    const access_token = jwt.sign({ _id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '1h' });
 
     return {
         access_token,
@@ -398,7 +397,7 @@ server.post("/create-blog", verifyJWT, (req, res) => {
 
     let authorId = req.user;
 
-    let { title, banner, content, tags, des, draft } = req.body;
+    let { title, banner, content, tags, des, draft, id } = req.body;
 
     if (!title || title.length > 200) {
         return res.status(400).json({
@@ -433,45 +432,61 @@ server.post("/create-blog", verifyJWT, (req, res) => {
 
     tags = tags.map((tag) => tag.toLowerCase());
 
-    let blog_id = title.replace(/[^a-zA-Z0-9]/g, ' ').replace(/\s+/g, '-').trim() + '-' + nanoid();
+    let blog_id = id || title.replace(/[^a-zA-Z0-9]/g, ' ').replace(/\s+/g, '-').trim() + '-' + nanoid();
 
-    let blog = new Blog({
-        blog_id,
-        title,
-        banner,
-        content,
-        tags,
-        des,
-        draft: Boolean(draft),
-        author: authorId
-    });
-
-    blog.save().then((b) => {
-        let incrementVal = draft ? 0 : 1;
-
-        User.findOneAndUpdate({ _id: authorId }, { $inc: { 'account_info.total_posts': incrementVal }, $push: { "blogs": b._id } })
-            .then((u) => {
+    if (id) {
+        Blog.findOneAndUpdate({ blog_id }, { title, banner, content, tags, des, draft: Boolean(draft) })
+            .then(() => {
                 return res.status(200).json({
-                    id: b.blog_id
+                    id: blog_id
                 });
             })
             .catch((err) => {
                 return res.status(500).json({
-                    message: "Error updating user's total posts"
+                    message: err.message
                 });
             });
-    })
-        .catch((err) => {
-            return res.status(500).json({
-                message: err.message
-            });
+    } else {
+        let blog = new Blog({
+            blog_id,
+            title,
+            banner,
+            content,
+            tags,
+            des,
+            draft: Boolean(draft),
+            author: authorId
         });
+
+        blog.save().then((b) => {
+            let incrementVal = draft ? 0 : 1;
+
+            User.findOneAndUpdate({ _id: authorId }, { $inc: { 'account_info.total_posts': incrementVal }, $push: { "blogs": b._id } })
+                .then((u) => {
+                    return res.status(200).json({
+                        id: b.blog_id
+                    });
+                })
+                .catch((err) => {
+                    return res.status(500).json({
+                        message: "Error updating user's total posts"
+                    });
+                });
+        })
+            .catch((err) => {
+                return res.status(500).json({
+                    message: err.message
+                });
+            });
+    }
+
+
 });
 
 server.post("/get-blog", (req, res) => {
-    let { blog_id } = req.body;
+    let { blog_id, draft, mode } = req.body;
 
-    let incrementVal = 1;
+    let incrementVal = mode !== "edit" ? 1 : 0;
 
     Blog.findOneAndUpdate({ blog_id }, { $inc: { 'activity.total_reads': incrementVal } })
         .populate('author', 'personal_info.username personal_info.fullname personal_info.profile_img')
@@ -485,7 +500,13 @@ server.post("/get-blog", (req, res) => {
                         message: "Error updating user's total reads"
                     });
                 });
-            return res.status(200).json({blog});
+
+            if (!draft && blog.draft) {
+                return res.status(400).json({
+                    message: "you can not access draft blogs"
+                });
+            }
+            return res.status(200).json({ blog });
         })
         .catch((err) => {
             return res.status(500).json({
