@@ -606,7 +606,7 @@ server.post("/add-comment", verifyJWT, (req, res) => {
 
     newComment.save().then((c) => {
         let { commentedAt, comment, children } = c;
-        Blog.findOneAndUpdate({ _id }, { $push: { 'comments': c._id }, $inc: { 'activity.total_comments': 1 }, "activity.total_parent_comments": 1 })
+        Blog.findOneAndUpdate({ _id }, { $push: { 'comments': c._id }, $inc: { 'activity.total_comments': 1, "activity.total_parent_comments": 1 } })
             .then((blog) => {
                 console.log("new comment added");
             })
@@ -641,7 +641,7 @@ server.post("/get-blog-comments", (req, res) => {
         .sort({ 'commentedAt': -1 })
         .then((comment) => {
             console.log(comment);
-            return res.status(200).json( comment );
+            return res.status(200).json(comment);
         })
         .catch((err) => {
             return res.status(500).json({
