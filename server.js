@@ -16,6 +16,7 @@ import aws from 'aws-sdk';
 import User from './Schema/User.js';
 import serviceAccount from './mern-blog-bc39f-firebase-adminsdk-f8jv6-de3e2c721d.json' assert { type: "json" };
 import Blog from './Schema/Blog.js';
+import Notification from './Schema/Notification.js';
 
 
 const server = express();
@@ -507,6 +508,73 @@ server.post("/get-blog", (req, res) => {
                 });
             }
             return res.status(200).json({ blog });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/like-blog", verifyJWT, (req, res) => {
+
+    let user_id = req.user;
+    let { _id, isliked } = req.body;
+
+    let incrementVal = !isliked ? 1 : -1;
+
+    Blog.findOneAndUpdate({ _id }, { $inc: { 'activity.total_likes': incrementVal } })
+        .then((blog) => {
+            if (!isliked) {
+                let like = new Notification({
+                    type: 'like',
+                    blog: _id,
+                    notification_for: blog.author,
+                    user: user_id
+                });
+                like.save().then(() => {
+                    return res.status(200).json({
+                        liked_by_user: true
+                    });
+                })
+                    .catch((err) => {
+                        return res.status(500).json({
+                            message: err.message
+                        });
+                    });
+            } else {
+                Notification.deleteOne({ type: 'like', blog: _id, user: user_id })
+                    .then(() => {
+                        return res.status(200).json({
+                            liked_by_user: false
+                        });
+                    })
+                    .catch((err) => {
+                        return res.status(500).json({
+                            message: err.message
+                        });
+                    });
+
+
+            }
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/isliked-by-user", verifyJWT, (req, res) => {
+
+    let user_id = req.user;
+    let { _id } = req.body;
+
+    Notification.exists({ type: 'like', blog: _id, user: user_id })
+        .then((result) => {
+            return res.status(200).json({
+                result
+            });
         })
         .catch((err) => {
             return res.status(500).json({
