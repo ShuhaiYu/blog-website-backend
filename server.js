@@ -588,7 +588,7 @@ server.post("/add-comment", verifyJWT, (req, res) => {
 
     let user_id = req.user;
 
-    let { _id, comment, blog_author } = req.body;
+    let { _id, comment, blog_author, replying_to } = req.body;
 
     if (!comment) {
         return res.status(403).json({
@@ -596,31 +596,49 @@ server.post("/add-comment", verifyJWT, (req, res) => {
         });
     }
 
-    let newComment = new Comment({
+    let newComment = {
         blog_id: _id,
         blog_author,
         comment,
         commented_by: user_id,
+    };
 
-    });
+    if (replying_to) {
+        newComment.isReply = true;
+        newComment.parent = replying_to;
+    }
 
-    newComment.save().then((c) => {
+
+    new Comment(newComment).save().then(async (c) => {
         let { commentedAt, comment, children } = c;
-        Blog.findOneAndUpdate({ _id }, { $push: { 'comments': c._id }, $inc: { 'activity.total_comments': 1, "activity.total_parent_comments": 1 } })
+        Blog.findOneAndUpdate({ _id }, { $push: { 'comments': c._id }, $inc: { 'activity.total_comments': 1, "activity.total_parent_comments": replying_to ? 0 : 1 } })
             .then((blog) => {
                 console.log("new comment added");
             })
 
 
-        let commentNotification = new Notification({
-            type: 'comment',
+        let commentNotification = {
+            type: replying_to ? "reply" : 'comment',
             blog: _id,
             notification_for: blog_author,
             user: user_id,
             comment: c._id
-        });
+        };
 
-        commentNotification.save().then((notification) => {
+        if (replying_to) {
+            commentNotification.replied_on_comment = replying_to;
+            await Comment.findOneAndUpdate({ _id: replying_to }, { $push: { children: c._id } })
+                .then((replyingToCommentDoc) => {
+                    commentNotification.notification_for = replyingToCommentDoc.commented_by;
+                })
+                .catch((err) => {
+                    return res.status(500).json({
+                        message: err.message
+                    });
+                });
+        }
+
+        new Notification(commentNotification).save().then((notification) => {
             console.log("new comment notification added");
         })
 
@@ -650,6 +668,104 @@ server.post("/get-blog-comments", (req, res) => {
         });
 });
 
+server.post("/get-replies", (req, res) => {
+    let { _id, skip } = req.body;
+
+    let maxLimit = 5;
+
+    Comment.findOne({ _id })
+        .populate({
+            path: 'children',
+            option: {
+                skip: skip,
+                limit: maxLimit,
+                sort: { 'commentedAt': -1 }
+            },
+            populate: {
+                path: 'commented_by',
+                select: 'personal_info.username personal_info.fullname personal_info.profile_img'
+            },
+            select: '-blog_id -updatedAt'
+        })
+        .select('children')
+        .then((doc) => {
+            return res.status(200).json({ replies: doc.children });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+const deleteComments = (_id) => {
+    Comment.findOneAndDelete({ _id })
+        .then((comment) => {
+            if (comment.parent) {
+                Comment.findOneAndUpdate({ _id: comment.parent }, { $pull: { children: _id } })
+                    .then(() => {
+                        console.log("reply deleted");
+                    })
+                    .catch((err) => {
+                        console.log(err.message);
+                    });
+            }
+
+            Notification.findOneAndDelete({ comment: _id })
+                .then(() => {
+                    console.log("comment notification deleted");
+                })
+                .catch((err) => {
+                    console.log(err.message);
+                });
+
+            Notification.findOneAndDelete({ reply: _id })
+                .then(() => {
+                    console.log("reply notification deleted");
+                })
+                .catch((err) => {
+                    console.log(err.message);
+                });
+
+            Blog.findOneAndUpdate({ _id: comment.blog_id }, { $pull: { comments: _id }, $inc: { 'activity.total_comments': -1, "activity.total_parent_comments": comment.parent ? 0 : -1 } })
+                .then(() => {
+                    if (comment.children.length > 0) {
+                        comment.children.map((child) => {
+                            deleteComments(child);
+                        });
+                    }
+                })
+
+
+        })
+        .catch((err) => {
+            console.log(err.message);
+        });
+}
+
+server.post("/delete-comment", verifyJWT, (req, res) => {
+    let { _id } = req.body;
+    let user_id = req.user;
+
+    Comment.findOne({ _id })
+        .then((comment) => {
+            if (comment.commented_by == user_id || comment.blog_author == user_id) {
+                deleteComments(_id)
+                return res.status(200).json({
+                    message: 'Comment deleted'
+                });
+            } else {
+                return res.status(403).json({
+                    message: 'You can not delete this comment'
+                });
+            }
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
 
 server.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
