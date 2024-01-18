@@ -216,6 +216,62 @@ server.post('/signin', (req, res) => {
         });
 });
 
+server.post("/change-password", verifyJWT, (req, res) => {
+    let user_id = req.user;
+    let { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+        return res.status(403).json({
+            message: 'Please fill out all fields'
+        });
+    }
+
+    if (!passwordRegex.test(newPassword)) {
+        return res.status(403).json({
+            message: 'Password must be 6-20 characters, contain at least one digit, one lowercase, and one uppercase letter'
+        });
+    }
+
+    User.findOne({ _id: user_id }).then((user) => {
+        if (user.google_auth) {
+            return res.status(403).json({
+                message: 'Please change password from Google'
+            });
+        }
+        bcrypt.compare(currentPassword, user.personal_info.password, (err, result) => {
+            if (err) {
+                return res.status(500).json({
+                    message: err.message
+                });
+            }
+            if (!result) {
+                return res.status(403).json({
+                    message: 'Old password is incorrect'
+                });
+            }
+
+            bcrypt.hash(newPassword, 10, (err, hash) => {
+                User.findOneAndUpdate({ _id: req.user }, { 'personal_info.password': hash })
+                    .then(() => {
+                        return res.status(200).json({
+                            message: 'Password changed successfully'
+                        });
+                    })
+                    .catch((err) => {
+                        return res.status(500).json({
+                            message: err.message
+                        });
+                    });
+            });
+        });
+    })
+        .catch(err => {
+            return res.status(500).json({
+                message: "User not found"
+            });
+        });
+});
+
 server.post("/google-auth", async (req, res) => {
 
 
