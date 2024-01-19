@@ -450,6 +450,97 @@ server.post("/get-profile", (req, res) => {
         });
 });
 
+server.post("/update-profile-img", verifyJWT, (req, res) => {
+
+    let user_id = req.user;
+
+    let { url } = req.body;
+
+    User.findOneAndUpdate({ _id: user_id }, { 'personal_info.profile_img': url })
+        .then(() => {
+            return res.status(200).json({
+                profile_img: url
+            });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/update-profile", verifyJWT, (req, res) => {
+
+    let user_id = req.user;
+
+    let bioLimit = 150;
+
+    let { username, bio, social_links } = req.body;
+
+    if (username.length < 3) {
+        return res.status(400).json({
+            message: "Username must be at least 3 characters"
+        });
+    }
+
+    if (username.length > 20) {
+        return res.status(400).json({
+            message: "Username must be less than 20 characters"
+        });
+    }
+
+    if (bio.length > bioLimit) {
+        return res.status(400).json({
+            message: `Bio must be less than ${bioLimit} characters`
+        });
+    }
+
+    let social_links_keys = Object.keys(social_links);
+
+    try {
+        for (let i = 0; i < social_links_keys.length; i++) {
+            if (social_links[social_links_keys[i]].length) {
+                let hostname = new URL(social_links[social_links_keys[i]]).hostname;
+                if (!hostname.includes(`${social_links_keys[i]}.com`) && social_links_keys[i] !== 'website') {
+                    return res.status(400).json({
+                        message: `Please provide a valid ${social_links_keys[i]} link`
+                    });
+
+                }
+            }
+        }
+    } catch (err) {
+        return res.status(500).json({
+            message: "You must provide full social links with https:// included"
+        });
+    }
+
+    let UpdateObj = {
+        'personal_info.username': username,
+        'personal_info.bio': bio,
+        social_links
+    };
+
+    User.findOneAndUpdate({ _id: user_id }, UpdateObj,{runValidators: true})
+        .then(() => {
+            return res.status(200).json({
+                username
+            });
+        })
+        .catch((err) => {
+            if(err.code === 11000){
+                return res.status(409).json({
+                    message: "Username already exists"
+                });
+            }
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+
+
+});
+
 
 server.post("/create-blog", verifyJWT, (req, res) => {
 
