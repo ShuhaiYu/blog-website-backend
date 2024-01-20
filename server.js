@@ -521,14 +521,14 @@ server.post("/update-profile", verifyJWT, (req, res) => {
         social_links
     };
 
-    User.findOneAndUpdate({ _id: user_id }, UpdateObj,{runValidators: true})
+    User.findOneAndUpdate({ _id: user_id }, UpdateObj, { runValidators: true })
         .then(() => {
             return res.status(200).json({
                 username
             });
         })
         .catch((err) => {
-            if(err.code === 11000){
+            if (err.code === 11000) {
                 return res.status(409).json({
                     message: "Username already exists"
                 });
