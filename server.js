@@ -735,7 +735,7 @@ server.post("/add-comment", verifyJWT, (req, res) => {
 
     let user_id = req.user;
 
-    let { _id, comment, blog_author, replying_to } = req.body;
+    let { _id, comment, blog_author, replying_to , notification_id} = req.body;
 
     if (!comment) {
         return res.status(403).json({
@@ -783,6 +783,19 @@ server.post("/add-comment", verifyJWT, (req, res) => {
                         message: err.message
                     });
                 });
+            
+                if (notification_id){
+                    Notification.findOneAndUpdate({_id: notification_id}, {reply: c._id})
+                    .then(() => {
+                        console.log("reply added to notification");
+                    })
+                    .catch((err) => {
+                        return res.status(500).json({
+                            message: err.message
+                        });
+                    });
+
+                }
         }
 
         new Notification(commentNotification).save().then((notification) => {
@@ -866,7 +879,7 @@ const deleteComments = (_id) => {
                     console.log(err.message);
                 });
 
-            Notification.findOneAndDelete({ reply: _id })
+            Notification.findOneAndUpdate({ reply: _id }, {$unset: {reply: 1}})
                 .then(() => {
                     console.log("reply notification deleted");
                 })
@@ -962,8 +975,13 @@ server.post("/notifications", verifyJWT, (req, res) => {
         .populate('replied_on_comment', 'comment')
         .populate('reply', 'comment')
         .sort({ 'createdAt': -1 })
-        .select('createAt type reply seen')
+        .select('createdAt type reply seen')
         .then((notifications) => {
+            Notification.updateMany(findQuery, { seen: true })
+            .then(() => {
+                console.log("notifications updated");
+            })
+                
             return res.status(200).json({notifications});
         })
         .catch((err) => {
