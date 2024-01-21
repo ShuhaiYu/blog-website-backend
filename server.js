@@ -914,6 +914,88 @@ server.post("/delete-comment", verifyJWT, (req, res) => {
         });
 });
 
+server.get("/new-notification", verifyJWT, (req, res) => {
+    let user_id = req.user;
+
+    Notification.exists({ notification_for: user_id, seen: false, user: { $ne: user_id } })
+        .then((result) => {
+            if (result) {
+                return res.status(200).json({
+                    new_notification_available: true
+                });
+            } else {
+                return res.status(200).json({
+                    new_notification_available: false
+                });
+            }
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/notifications", verifyJWT, (req, res) => {
+    let user_id = req.user;
+
+    let { page, filter, deletedDocCount } = req.body;
+
+    let maxLimit = 10;
+
+    let findQuery = { notification_for: user_id, user: { $ne: user_id } };
+
+    if (filter !== 'all') {
+        findQuery.type = filter;
+    }
+
+    let skip = (page - 1) * maxLimit;
+
+    if (deletedDocCount) {
+        skip -= deletedDocCount;
+    }
+
+    Notification.find(findQuery).limit(maxLimit).skip(skip)
+        .populate('user', 'personal_info.username personal_info.fullname personal_info.profile_img')
+        .populate('blog', 'title blog_id')
+        .populate('comment', 'comment')
+        .populate('replied_on_comment', 'comment')
+        .populate('reply', 'comment')
+        .sort({ 'createdAt': -1 })
+        .select('createAt type reply seen')
+        .then((notifications) => {
+            return res.status(200).json({notifications});
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+})
+
+server.post("/all-notifications-count", verifyJWT, (req, res) => {
+
+    let user_id = req.user;
+
+    let { filter } = req.body;
+
+    let findQuery = { notification_for: user_id, user: { $ne: user_id } };
+
+    if (filter !== 'all') {
+        findQuery.type = filter;
+    }
+
+    Notification.countDocuments(findQuery)
+        .then((count) => {
+            return res.status(200).json({ totalDocs: count });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+})
+
 server.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
 });
