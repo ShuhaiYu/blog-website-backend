@@ -1012,7 +1012,75 @@ server.post("/all-notifications-count", verifyJWT, (req, res) => {
                 message: err.message
             });
         });
-})
+});
+
+server.post("/user-written-blogs", verifyJWT, (req, res) => {
+    let user_id = req.user;
+    let { page, draft, query, deletedDocCount } = req.body;
+
+    let maxLimit = 5;
+    let skip = (page - 1) * maxLimit;
+
+    if (deletedDocCount) {
+        skip -= deletedDocCount;
+    }
+
+    Blog.find({ author: user_id, draft, title: new RegExp(query, 'i') }).limit(maxLimit).skip(skip).sort({ 'publishedAt': -1 })
+        .select('blog_id title publishedAt banner activity des draft -_id')
+        .then((blogs) => {
+            return res.status(200).json({ blogs });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/user-written-blogs-count", verifyJWT, (req, res) => {
+    let user_id = req.user;
+    let { draft, query } = req.body;
+
+    Blog.countDocuments({ author: user_id, draft, title: new RegExp(query, 'i') })
+        .then((count) => {
+            return res.status(200).json({ totalDocs: count });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
+server.post("/delete-blog", verifyJWT, (req, res) => {
+    let user_id = req.user;
+    let { blog_id } = req.body;
+
+    Blog.findOneAndDelete({ blog_id})
+        .then((blog) => {
+            Notification.deleteMany({ blog: blog._id }).then(() => {
+                console.log("notifications deleted");
+            })
+
+            Comment.deleteMany({ blog_id: blog._id }).then(() => {
+                console.log("comments deleted");
+            })
+
+            User.findOneAndUpdate({ _id: user_id }, { $inc: { 'account_info.total_posts': -1 }, $pull: { "blogs": blog._id } }).then(() => {
+               console.log("user updated");
+            })
+
+            return res.status(200).json({
+                message: "Blog deleted"
+            });
+        })
+        .catch((err) => {
+            return res.status(500).json({
+                message: err.message
+            });
+        });
+});
+
 
 server.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
