@@ -107,6 +107,11 @@ const generateUsername = async (email) => {
     return username;
 }
 
+server.get('/', (req, res) => {
+    console.log('Received request:', req.method, req.url);
+    res.status(200).send('Hello World This is the server for the BlogSpace!');
+});
+
 server.get('/get-upload-url', (req, res) => {
     generateUploadURL()
         .then((url) => {
