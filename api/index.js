@@ -13,11 +13,11 @@ import aws from 'aws-sdk';
 
 
 
-import User from './Schema/User.js';
-import serviceAccount from './mern-blog-bc39f-firebase-adminsdk-f8jv6-de3e2c721d.json' assert { type: "json" };
-import Blog from './Schema/Blog.js';
-import Notification from './Schema/Notification.js';
-import Comment from './Schema/Comment.js';
+import User from '../Schema/User.js';
+import serviceAccount from '../mern-blog-bc39f-firebase-adminsdk-f8jv6-de3e2c721d.json' assert { type: "json" };
+import Blog from '../Schema/Blog.js';
+import Notification from '../Schema/Notification.js';
+import Comment from '../Schema/Comment.js';
 
 
 const server = express();
